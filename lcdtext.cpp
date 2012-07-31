@@ -1,3 +1,6 @@
+#include <avr/io.h>
+#include <Arduino.h>
+#include "lcdtext.h"
 
 /*
  * the LCD shield uses the SPI clock & data-out pins, but uses pin 9 for
@@ -28,6 +31,11 @@
 // spi select = pin 10
 // we don't use this pin but it needs to be set to output mode for SPI to work.
 #define SPI_SELECT_PIN   10
+
+// reset = pin 8
+#define RESET_PIN        8
+#define RESET_SET        __set_bit(RESET_PIN)
+#define RESET_CLEAR      __clear_bit(RESET_PIN)
 
 #define CHAR_WIDTH 4
 #define CHAR_HEIGHT 8
@@ -68,54 +76,11 @@ const uint32_t zrom_font[128] = {
   0x00770000, 0x41360800, 0x08040804, 0x02050200,
 };
 
-class LcdText {
-private:
-  static const uint8_t SCREEN_WIDTH = 131;
-  static const uint8_t SCREEN_HEIGHT = 132;
-  static const uint16_t SCREEN_PIXELS = (uint16_t)SCREEN_WIDTH * (uint16_t)SCREEN_HEIGHT;
-  static const uint8_t SCREEN_X_OFFSET = 2;
-  static const uint8_t SCREEN_Y_OFFSET = 2;
-
-  static const int RESET = 8;
-
-  // fields for SPI control register: 4MHz, MSB, falling-edge clock trigger.
-  static const int SPI_ON = 0x58;
-  static const int SPI_OFF = 0x18;
-
-// in theory, there are two different drivers. in reality, i don't care.
-#ifdef LCD_DRIVER_EPSON
-  static const uint8_t SetPage = 0x75;
-  static const uint8_t SetColumn = 0x15;
-  static const uint8_t WriteData = 0x5C;
-  static const uint8_t Nop = 0x25;
-#else /* normal phillips driver */
-  static const uint8_t SetPage = 0x2B;
-  static const uint8_t SetColumn = 0x2A;
-  static const uint8_t WriteData = 0x2C;
-  static const uint8_t Nop = 0x00;
-#endif
-
-  int cursor;
-
-  // color is, confusingly, in 0BGR format.
-  int fgcolor;
-  int bgcolor;
-
-  void send(uint8_t is_command, uint8_t data);
-
-public:
-  LcdText();
-  void sendData(uint8_t data) { send(0, data); }
-  void sendCommand(uint8_t data) { send(1, data); }
-  void clear();
-  void drawChar(uint8_t c, uint8_t x, uint8_t y);
-  void drawText(char *s);
-  void setColor(int color) { fgcolor = color; }
-  void setBackgroundColor(int color) { bgcolor = color; }
-  void setCursor(uint8_t y, uint8_t x) { cursor = (y << 5) | x; }
-};
 
 LcdText::LcdText() : cursor(0) {
+}
+
+void LcdText::init() {
   pinMode(SPI_CLOCK_PIN, OUTPUT);
   pinMode(SPI_OUT_PIN, OUTPUT);
   pinMode(SELECT_PIN, OUTPUT);
@@ -127,12 +92,32 @@ LcdText::LcdText() : cursor(0) {
   SELECT_SET;
   SPI_OUT_CLEAR;
   SPI_CLOCK_SET;
+
+  // good grief.
+  delay(200);
+  RESET_CLEAR;
+  delay(200);
+  RESET_SET;
+  delay(200);
+
+  sendCommand(SleepOut);
+  sendCommand(BoosterOn);
+  sendCommand(ColorMode);
+  sendData(3);
+  sendCommand(MemoryAccess);
+  sendData(0xc8);
+  sendCommand(Contrast);
+  sendData(0x30);
+  sendCommand(Nop);
+  delayMicroseconds(200);
+  sendCommand(DisplayOn);
 }
 
 void LcdText::send(uint8_t is_command, uint8_t data) {
   SELECT_CLEAR;
 
   // send the command/data bit out manually.
+  // FIXME: this turns into a test/branch, which is slow. the whole function is tiny. macro it.
   if (!is_command) {
     SPI_OUT_SET;
   } else {
@@ -174,28 +159,38 @@ void LcdText::clear() {
   cursor = 0;
 }
 
+/**
+ * the LCD screen stores each pixel's color as 12 bits, but the firmware's
+ * interface receives 8 bits of data at a time, so the most efficient way to
+ * paint a segment of the screen is to send 2 pixels at a time (3 bytes).
+ *
+ * to avoid wasting time calculating the various shifts when we're painting,
+ * we just cache the 4 possible combinations of the 2 colors (foreground and
+ * background).
+ */
+void LcdText::cacheColors() {
+  uint8_t index = 0;
+  for (uint8_t combo = 0; combo < 4; combo++) {
+    int p0 = (combo & 2) ? fgcolor : bgcolor;
+    int p1 = (combo & 1) ? fgcolor : bgcolor;
+    colorCache[index++] = (p1 >> 4) & 0xff;
+    colorCache[index++] = ((p1 & 0xf) << 4) | (p0 >> 8);
+    colorCache[index++] = p0 & 0xff;
+    index++;
+  }
+}
+
 void LcdText::drawChar(uint8_t c, uint8_t x, uint8_t y) {
   /*
    * re-orient (x, y): driver considers (0, 0) to be the upper right, with
    * x and y reversed.
    */
-  // re-orient (x, y)
   uint8_t px = (y * CHAR_HEIGHT) + SCREEN_X_OFFSET;
   uint8_t py = SCREEN_HEIGHT - (x * CHAR_WIDTH) - SCREEN_Y_OFFSET;
 
   uint32_t data = zrom_font[c];
 
   // compute fg/bg pixel pairs for the 4 possible 2-pixel combos.
-  uint8_t color_table[16];
-  uint8_t index = 0;
-  for (uint8_t combo = 0; combo < 4; combo++) {
-    int p0 = (combo & 2) ? fgcolor : bgcolor;
-    int p1 = (combo & 1) ? fgcolor : bgcolor;
-    color_table[index++] = (p1 >> 4) & 0xff;
-    color_table[index++] = ((p1 & 0xf) << 4) | (p0 >> 8);
-    color_table[index++] = p0 & 0xff;
-    index++;
-  }
 
   // bounding box
   sendCommand(SetPage);
@@ -210,9 +205,9 @@ void LcdText::drawChar(uint8_t c, uint8_t x, uint8_t y) {
 
   for (uint8_t i = 0; i < 16; i++) {
     uint8_t n = (data & 0x3) << 2;
-    sendData(color_table[n++]);
-    sendData(color_table[n++]);
-    sendData(color_table[n++]);
+    sendData(colorCache[n++]);
+    sendData(colorCache[n++]);
+    sendData(colorCache[n++]);
     data >>= 2;
   }
 
@@ -220,7 +215,7 @@ void LcdText::drawChar(uint8_t c, uint8_t x, uint8_t y) {
   sendCommand(Nop);
 }
 
-void LcdText::drawText(char *s) {
+void LcdText::drawText(const char *s) {
   while (char c = *s++) {
     uint8_t y = cursor >> 5;
     uint8_t x = cursor & 31;
