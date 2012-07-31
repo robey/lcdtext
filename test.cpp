@@ -1,4 +1,4 @@
-#include "lcdtext.cpp"
+#include "lcdtext.h"
 
 LcdText text;
 
