@@ -93,12 +93,13 @@ void LcdText::init() {
   SPI_OUT_CLEAR;
   SPI_CLOCK_SET;
 
-  // good grief.
-  delay(200);
+  // drop RESET for 1us.
   RESET_CLEAR;
-  delay(200);
+  delayMicroseconds(1);
   RESET_SET;
-  delay(200);
+  // according to the spec sheet, the screen may take up to 500ms to become
+  // fully active (!), but it will start responding to commands after 1us.
+  delayMicroseconds(1);
 
   sendCommand(SleepOut);
   sendCommand(BoosterOn);
@@ -113,11 +114,10 @@ void LcdText::init() {
   sendCommand(DisplayOn);
 }
 
-void LcdText::send(uint8_t is_command, uint8_t data) {
+inline void LcdText::send(uint8_t is_command, uint8_t data) {
   SELECT_CLEAR;
 
-  // send the command/data bit out manually.
-  // FIXME: this turns into a test/branch, which is slow. the whole function is tiny. macro it.
+  // send the command/data bit out manually. (branch is optimized away by inline)
   if (!is_command) {
     SPI_OUT_SET;
   } else {
