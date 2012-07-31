@@ -57,8 +57,8 @@ clean:
 vpath %.c $(ARDUINO_CORES)
 vpath %.cpp $(ARDUINO_CORES)
 
-.cpp.s:
-	$(CXX) -S $(CXX_OPTIONS) $< -o $(TARGET)/$@
+$(TARGET)/%.s: %.cpp
+	$(CXX) -S $(CXX_OPTIONS) $< -o $@
 
 $(TARGET)/%.o: %.cpp
 	$(CXX) -c -MMD $(CXX_OPTIONS) $< -o $@
