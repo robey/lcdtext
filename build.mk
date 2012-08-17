@@ -97,21 +97,3 @@ wut:
 %.eep: %.elf
 	$(OBJCOPY) -j .eeprom --set-section-flags=.eeprom="alloc,load" --change-section-lma .eeprom=0 -O ihex $< $@
 
-
-#avr-gcc -Os -Wl,--gc-sections -mmcu=atmega328p
-#  -o /var/folders/td/f0_v0yys6kjbr9vx3n5yhs5m0000gn/T/build3672965930297235545.tmp/sketch_lcd.cpp.elf
-#  /var/folders/td/f0_v0yys6kjbr9vx3n5yhs5m0000gn/T/build3672965930297235545.tmp/sketch_lcd.cpp.o
-#  /var/folders/td/f0_v0yys6kjbr9vx3n5yhs5m0000gn/T/build3672965930297235545.tmp/core.a
-#  -L/var/folders/td/f0_v0yys6kjbr9vx3n5yhs5m0000gn/T/build3672965930297235545.tmp -lm 
-#avr-objcopy -O ihex -j .eeprom --set-section-flags=.eeprom=alloc,load --no-change-warnings --change-section-lma .eeprom=0 /var/folders/td/f0_v0yys6kjbr9vx3n5yhs5m0000gn/T/build3672965930297235545.tmp/sketch_lcd.cpp.elf /var/folders/td/f0_v0yys6kjbr9vx3n5yhs5m0000gn/T/build3672965930297235545.tmp/sketch_lcd.cpp.eep 
-#avr-objcopy -O ihex -R .eeprom 
-#  /var/folders/td/f0_v0yys6kjbr9vx3n5yhs5m0000gn/T/build3672965930297235545.tmp/sketch_lcd.cpp.elf 
-#  /var/folders/td/f0_v0yys6kjbr9vx3n5yhs5m0000gn/T/build3672965930297235545.tmp/sketch_lcd.cpp.hex 
-#
-#avr-gcc -Os -mmcu=atmega328p -DF_CPU=16000000L -Wl,--gc-sections 
-#  target/test.o target/liblcdtext.a target/libarduino.a -o target/test.elf
-
-#build/%.o: $(ARDUINO_CORES)/%.cpp
-#	$(CXX) -c -MMD $(CXX_OPTIONS) $< -o $@ -Wno-error
-#build/%.o: $(ARDUINO_CORES)/%.c
-#	$(CC) -c -MMD $(CC_OPTIONS) $< -o $@
