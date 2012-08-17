@@ -135,6 +135,14 @@ inline void LcdText::send(uint8_t is_command, uint8_t data) {
   SELECT_SET;
 }
 
+void LcdText::sendData(uint8_t data) {
+  send(0, data);
+}
+
+void LcdText::sendCommand(uint8_t command) {
+  send(1, command);
+}
+
 void LcdText::clear() {
   sendCommand(SetPage);
   sendData(0);

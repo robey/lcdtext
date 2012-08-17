@@ -48,8 +48,8 @@ private:
 public:
   LcdText();
   void init();
-  void sendData(uint8_t data) { send(0, data); }
-  void sendCommand(uint8_t data) { send(1, data); }
+  void sendData(uint8_t data);
+  void sendCommand(uint8_t data);
   void clear();
   void drawChar(uint8_t c, uint8_t x, uint8_t y);
   void drawText(const char *s);
