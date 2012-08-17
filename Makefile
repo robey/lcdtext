@@ -19,4 +19,4 @@ $(TARGET)/test.elf: $(TEST_OBJ) $(LIBRARY) $(LIBARDUINO_LIB)
 
 .PHONY: test all
 
--include build/*.d
+-include $(TARGET)/*.d
